@@ -1,4 +1,3 @@
-# TODO: Produce report about unconvertible parts of the dictionary
 from __future__ import print_function
 
 
