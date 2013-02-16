@@ -1,5 +1,13 @@
-from __future__ import print_function
+# TODO: Convert illegal characters to UTF8
+# TODO: prevent this from happening: {{|-}^}
+# TODO: Implement \cxp
+# TODO: \cxds can appear in the middle of the translation
+# TODO: Deal with things like {,?}
+# TODO: What does ^ mean in Eclipse?
+# TODO: What does #N mean in Eclipse?
+# TODO: convert supported commands from Eclipse (ignore some, refuse to translate others)
 
+from __future__ import print_function
 
 import sys
 import re
@@ -8,8 +16,6 @@ import ply.lex as lex
 import ply.yacc as yacc
 import json
 from collections import defaultdict
-
-
 
 class CommandToken(object):
     def __init__(self):
@@ -101,7 +107,8 @@ t_TEXT = r'[^\\\{\}\r\n]+'
 
 def t_error(t):
     column = find_column(t.lexer.data, t)
-    sys.stderr.write("Illegal character '%s' on line %d column %d" % (t.value[0], t.lineno, column))
+    sys.stderr.write("Illegal character '%s' on line %d column %d" % 
+                     (t.value[0], t.lineno, column))
     sys.exit()
 
 lexer = lex.lex()
@@ -119,7 +126,7 @@ stack = []
 translations = []
 current_lhs = []
 current_rhs = []
-current_unrecognized = []
+current_unrecognized = set()
 current_keywords = set()
 prefix_delete_space = False
 suffix_delete_space = False
@@ -147,14 +154,14 @@ def finish_translation():
     global suffix_delete_space
     global add_glue
 
-
     if len(current_lhs) == 0:
         return
     lhs = ''.join(current_lhs)
     rhs = ''.join(current_rhs)
     
     if current_unrecognized:
-        exp = 'because it contained unrecognized commands: ' + ', '.join(current_unrecognized)
+        exp = ('because it contained unrecognized commands: ' + 
+               ', '.join(current_unrecognized))
         skipped_translations.append((lhs, rhs, exp))
         unrecognized_controls.update(current_unrecognized)
     elif any((ord(c) > 0b01111111 for c in lhs + rhs)):
@@ -182,7 +189,7 @@ def finish_translation():
         
     del current_rhs[:]
     del current_lhs[:]
-    del current_unrecognized[:]
+    current_unrecognized.clear()
     prefix_delete_space = False
     suffix_delete_space = False
     add_glue = False
@@ -199,14 +206,13 @@ def output_to_rhs(s):
     current_rhs.append(new)
 
 def report_unrecognized_control_in_translation(s):
-    current_unrecognized.append(s)    
+    current_unrecognized.add(s)    
 
 # TODO: Add support to plover for force lower case
 ignore_controls = set(('s', 'cxa', 'cxsgsuf', 'cxsgpre', 'cxfl'))
 
 def p_group(p):
-    '''group : '{' push control '}'
-             | '{' push control sequence '}'
+    '''group : '{' push sequence '}'
     '''
     stack.pop()
 
@@ -235,14 +241,27 @@ def p_control(p):
         stack[-1].output = output_to_lhs
         stack[-2].output = output_to_rhs
         stack[-2].report_control = report_unrecognized_control_in_translation
-    elif p[1].control in ignore_controls:
-        pass
     elif p[1].control == 'cxds':
         process_delete_space()
     elif p[1].control == 'cxfc':
         stack[-1].output(' {-|}')
     elif p[1].control == 'cxfing':
         glue()
+    elif p[1].control == 'cxconf':
+        stack[-1].output = shout_in_the_void
+    elif p[1].control == 'cxc':
+        global current_lhs
+        lhs = current_lhs[:]
+        if current_rhs:
+            print('conflict output', current_lhs, current_rhs, file=sys.stderr)
+            finish_translation()
+        current_lhs = lhs
+        stack[-1].output = output_to_rhs
+        stack[-1].report_control = report_unrecognized_control_in_translation
+    elif p[1].control in ignore_controls:
+        pass
+    elif p[1].ignore_if_unrecognized:
+        stack[-1].output = shout_in_the_void
     else:
         stack[-1].output(str(p[1]))
         stack[-1].report_control(p[1].control)
@@ -253,7 +272,7 @@ def p_text(p):
     stack[-1].output(p[1])
 
 def p_error(p):
-    sys.stderr.write("Syntax error in input!" + str(p))
+    sys.stderr.write("Syntax error in input!" + str(p) + '\n')
     sys.exit()
     
 parser = yacc.yacc()
@@ -261,7 +280,7 @@ parser = yacc.yacc()
 data = open(sys.argv[1]).read()
 lexer.data = data  # lexer error handling depends on this
 parser.parse(data, lexer=lexer)
-    
+
 finish_translation() # This must be called after parsing is done.
 
 dash_chars = set(('-', 'A', 'E', 'O', 'U', '*'))
@@ -308,7 +327,7 @@ if duplicates:
     print('Duplicates in original dictionary:', duplicates, file=sys.stderr)
 if len(conflicts):
     print('Conflicts in original dictionary:', len(conflicts), file=sys.stderr)
-    for k, l in conflicts:
+    for k, l in conflicts.items():
         print(' ', k, 'maps to', d[k], 'but also mapped to:', ', '.join(l), file=sys.stderr)
 if len(skipped_translations):
     print('Skipped translations:', len(skipped_translations), file=sys.stderr)
