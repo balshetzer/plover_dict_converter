@@ -22,7 +22,7 @@ You may want to see the report (or not).
 
 There is also a script to convert from a plover json dictionary to an RTF/CRE dictionary that, in theory, could be imported by any other CAT program.
 
-Make sure the command like is correct because the output file will be overwritten without warning:
+Make sure the command line is correct because the output file will be overwritten without warning:
 python convert_json_to_rtfcre_dict.py <input json file> <output rtf file>
 
 This is a first draft and needs some cleanup and improvement in usability.
