@@ -284,23 +284,27 @@ parser.parse(data, lexer=lexer)
 finish_translation() # This must be called after parsing is done.
 
 dash_chars = set(('-', 'A', 'E', 'O', 'U', '*'))
-def normalize_steno(s):
-    if '#' in s:
-        s = s.replace('#', '')
-        if not re.search('[0-9]', s):
-            s = '#' + s
+def normalize_steno(strokes_string):
+    strokes = strokes_string.split('/')
+    normalized = []
+    for s in strokes:
+        if '#' in s:
+            s = s.replace('#', '')
+            if not re.search('[0-9]', s):
+                s = '#' + s
     
-    seen_dash = False
-    l1 = [c for c in s]
-    l2 = []
-    for c in l1:
-        if c == '-':
-            if seen_dash:
-                continue
-        if c in dash_chars:
-            seen_dash = True
-        l2.append(c)
-    return ''.join(l2)
+        seen_dash = False
+        l1 = [c for c in s]
+        l2 = []
+        for c in l1:
+            if c == '-':
+                if seen_dash:
+                    continue
+            if c in dash_chars:
+                seen_dash = True
+            l2.append(c)
+        normalized.append(''.join(l2))
+    return '/'.join(normalized)
 
 keyword_index = defaultdict(list)
 
